@@ -17,6 +17,12 @@ try:
 except ImportError:
     PYTTSX3_AVAILABLE = False
 
+try:
+    from pydub import AudioSegment
+    PYDUB_AVAILABLE = True
+except ImportError:
+    PYDUB_AVAILABLE = False
+
 
 class TTSGenerator:
     """Handles text-to-speech generation and WAV file creation"""
@@ -215,17 +221,45 @@ class TTSGenerator:
             voice = await self._get_edge_voice()
             
             # Calculate rate as percentage offset from normal (100 WPM)
-            # Edge TTS rate format: '+0%' (normal), '+50%' (faster), '-50%' (slower)
-            # Convert WPM to percentage: (WPM - 100) / 100 * 100
             if self.rate != 100:
                 rate_percent = int((self.rate - 100) / 100.0 * 100)
                 rate_str = f"+{rate_percent}%" if rate_percent >= 0 else f"{rate_percent}%"
             else:
                 rate_str = "+0%"  # Normal speed
             
-            # Generate speech with rate parameter (no SSML needed!)
+            # Generate speech with rate parameter
+            # Note: edge-tts generates MP3 format internally, so we need to convert to WAV
+            temp_output = output_path.rsplit('.', 1)[0] + ".tmp.mp3"
+            
             communicate = edge_tts.Communicate(text, voice, rate=rate_str)
-            await communicate.save(output_path)
+            await communicate.save(temp_output)
+            
+            # Load the audio - edge-tts generates MP3, so we need pydub to convert to WAV
+            if not PYDUB_AVAILABLE:
+                raise RuntimeError(
+                    "pydub is required for edge-tts. "
+                    "edge-tts generates MP3 format and needs conversion to WAV. "
+                    "Install with: uv add pydub"
+                )
+            
+            # Load the audio file (edge-tts generates MP3)
+            try:
+                audio = AudioSegment.from_file(temp_output)
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to load audio file from edge-tts: {str(e)}. "
+                    "The file may be corrupted or in an unsupported format."
+                ) from e
+            
+            # Convert to WAV format
+            audio.export(output_path, format="wav")
+            
+            # Remove temp MP3 file
+            if os.path.exists(temp_output):
+                try:
+                    os.remove(temp_output)
+                except OSError:
+                    pass
         
         try:
             # Run async function
@@ -237,6 +271,13 @@ class TTSGenerator:
             
             return True
         except Exception as e:
+            # Clean up temp file if it exists
+            temp_file = output_path.rsplit('.', 1)[0] + ".tmp.mp3"
+            if os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                except OSError:
+                    pass
             raise RuntimeError(f"edge-tts generation failed: {str(e)}") from e
     
     def _generate_pyttsx3(self, text: str, output_path: str) -> bool:
