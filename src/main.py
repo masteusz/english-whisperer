@@ -2,13 +2,11 @@
 
 import sys
 import os
-import threading
-from pathlib import Path
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QTextEdit, QFileDialog, QMessageBox,
-    QProgressBar, QGroupBox, QFrame
+    QProgressBar, QGroupBox, QComboBox
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtGui import QFont
@@ -85,6 +83,7 @@ class EnglishWhispererApp(QMainWindow):
         self.is_processing = False
         self.tts_init_error = None
         self.generation_worker = None
+        self.current_language = "en"  # Default to English
         
         # Initialize UI
         self._init_ui()
@@ -150,6 +149,24 @@ class EnglishWhispererApp(QMainWindow):
         
         output_layout.addLayout(dir_layout)
         main_layout.addWidget(output_group)
+        
+        # Language selection section
+        language_group = QGroupBox("Language Settings")
+        language_layout = QHBoxLayout(language_group)
+        
+        language_label = QLabel("Language:")
+        language_label.setFont(QFont("Arial", 9))
+        language_layout.addWidget(language_label)
+        
+        self.language_combo = QComboBox()
+        self.language_combo.addItem("English", "en")
+        self.language_combo.addItem("German (Deutsch)", "de")
+        self.language_combo.setCurrentIndex(0)  # Default to English
+        self.language_combo.currentIndexChanged.connect(self._on_language_changed)
+        language_layout.addWidget(self.language_combo)
+        
+        language_layout.addStretch()
+        main_layout.addWidget(language_group)
         
         # Control buttons
         button_layout = QHBoxLayout()
@@ -229,13 +246,18 @@ class EnglishWhispererApp(QMainWindow):
     def _init_tts(self):
         """Initialize the TTS generator (called after GUI is ready)"""
         try:
+            # Get current language from combo box
+            language = self.language_combo.currentData()
+            
             # Try edge-tts first (best quality), fall back to pyttsx3
-            self.tts_generator = TTSGenerator(engine="auto")
+            self.tts_generator = TTSGenerator(engine="auto", language=language)
+            self.current_language = language
             engine_name = self.tts_generator.get_engine_name()
             is_online = self.tts_generator.is_online_required()
             self.generate_btn.setEnabled(True)
             
-            status_msg = f"TTS engine initialized: {engine_name}"
+            lang_name = "English" if language == "en" else "German"
+            status_msg = f"TTS engine initialized: {engine_name} ({lang_name})"
             if is_online:
                 status_msg += " (Requires internet connection)"
             self._log(status_msg)
@@ -252,12 +274,51 @@ class EnglishWhispererApp(QMainWindow):
             error_msg = (
                 f"Failed to initialize TTS engine:\n{str(e)}\n\n"
                 "Please ensure you have a TTS engine available:\n"
-                "- For best quality: Install Coqui TTS (uv add TTS)\n"
+                "- For best quality: Install edge-tts (uv add edge-tts)\n"
                 "- Fallback: Linux needs espeak/espeak-ng, Windows needs SAPI5\n\n"
                 "The application will continue, but WAV generation will be disabled."
             )
             self._log(f"ERROR: {error_msg}")
             QMessageBox.critical(self, "TTS Engine Error", error_msg)
+    
+    def _on_language_changed(self, index: int):
+        """Handle language selection change"""
+        if self.is_processing:
+            QMessageBox.warning(
+                self,
+                "Cannot Change Language",
+                "Please wait for the current generation to complete before changing the language."
+            )
+            # Reset to previous language
+            self.language_combo.blockSignals(True)
+            prev_lang = "en" if self.current_language == "de" else "de"
+            prev_index = 0 if prev_lang == "en" else 1
+            self.language_combo.setCurrentIndex(prev_index)
+            self.language_combo.blockSignals(False)
+            return
+        
+        new_language = self.language_combo.currentData()
+        
+        if new_language == self.current_language:
+            return
+        
+        self.current_language = new_language
+        lang_name = "English" if new_language == "en" else "German"
+        self._log(f"Language changed to: {lang_name}")
+        
+        # Update TTS generator language if it exists
+        if self.tts_generator:
+            try:
+                self.tts_generator.set_language(new_language)
+                self._log(f"TTS engine updated for {lang_name}")
+            except Exception as e:
+                self._log(f"Warning: Could not update TTS language: {str(e)}")
+                QMessageBox.warning(
+                    self,
+                    "Language Update Warning",
+                    f"Could not update TTS engine language: {str(e)}\n\n"
+                    "The language change will take effect on the next generation."
+                )
     
     def _start_generation(self):
         """Start the WAV generation process"""

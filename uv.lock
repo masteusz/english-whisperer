@@ -425,6 +425,11 @@ dev = [
     { name = "pyinstaller" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pyinstaller" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "edge-tts", specifier = ">=6.1.0" },
@@ -433,6 +438,9 @@ requires-dist = [
     { name = "pyttsx3", specifier = ">=2.90" },
 ]
 provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pyinstaller", specifier = ">=6.18.0" }]
 
 [[package]]
 name = "frozenlist"
@@ -709,7 +717,7 @@ resolution-markers = [
     "python_full_version == '3.9.*'",
 ]
 dependencies = [
-    { name = "zipp", version = "3.23.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
+    { name = "zipp", version = "3.23.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f3/49/3b30cad09e7771a4982d9975a8cbf64f00d4a1ececb53297f1d9a7be1b10/importlib_metadata-8.7.1.tar.gz", hash = "sha256:49fef1ae6440c182052f407c8d34a68f72efc36db9ca90dc0113398f2fdde8bb", size = 57107, upload-time = "2025-12-21T10:00:19.278Z" }
 wheels = [

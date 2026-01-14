@@ -26,7 +26,8 @@ class TTSGenerator:
         engine: Literal["edge", "pyttsx3", "auto"] = "auto",
         rate: int = 150,
         volume: float = 0.9,
-        voice: Optional[str] = None  # For edge-tts: voice name like "en-US-AriaNeural"
+        voice: Optional[str] = None,  # For edge-tts: voice name like "en-US-AriaNeural"
+        language: Literal["en", "de"] = "en"  # Language: "en" for English, "de" for German
     ):
         """
         Initialize the TTS engine
@@ -35,12 +36,14 @@ class TTSGenerator:
             engine: TTS engine to use ("edge", "pyttsx3", or "auto" for best available)
             rate: Speech rate (words per minute), default 150 (only for pyttsx3)
             volume: Volume level (0.0 to 1.0), default 0.9 (only for pyttsx3)
-            voice: Voice name for edge-tts (e.g., "en-US-AriaNeural"), None for default
+            voice: Voice name for edge-tts (e.g., "en-US-AriaNeural"), None for auto-select
+            language: Language code ("en" for English, "de" for German)
         """
         self.engine_type = engine
         self.rate = rate
         self.volume = volume
         self.edge_voice = voice
+        self.language = language
         self.pyttsx3_engine = None
         self.current_engine = None
         self._initialize_engine()
@@ -94,32 +97,88 @@ class TTSGenerator:
             
             self.pyttsx3_engine.setProperty('rate', self.rate)
             self.pyttsx3_engine.setProperty('volume', self.volume)
+            
+            # Set language for pyttsx3 (if supported)
+            # Note: Language support depends on the underlying TTS engine
+            # espeak supports language codes like 'de' for German
+            if sys.platform == 'linux' and self.language == "de":
+                try:
+                    # Try to set German language for espeak
+                    # This is engine-specific and may not work on all systems
+                    voices = self.pyttsx3_engine.getProperty('voices')
+                    for voice in voices:
+                        if 'german' in voice.name.lower() or 'de' in voice.id.lower():
+                            self.pyttsx3_engine.setProperty('voice', voice.id)
+                            break
+                except Exception:
+                    # If language setting fails, continue with default voice
+                    pass
+            
             self.current_engine = "pyttsx3"
         except Exception as e:
             raise RuntimeError(f"Failed to initialize pyttsx3: {str(e)}")
     
+    def set_language(self, language: Literal["en", "de"]):
+        """
+        Set the language for TTS generation
+        
+        Args:
+            language: Language code ("en" for English, "de" for German)
+        """
+        if language not in ("en", "de"):
+            raise ValueError(f"Unsupported language: {language}. Use 'en' or 'de'")
+        
+        self.language = language
+        
+        # For edge-tts, we'll use the new language on next generation
+        # For pyttsx3, we need to reinitialize to change language
+        if self.current_engine == "pyttsx3":
+            try:
+                self._init_pyttsx3()
+            except Exception:
+                # If reinitialization fails, keep the old engine
+                pass
+    
     async def _get_edge_voice(self):
-        """Get the best English voice for edge-tts"""
+        """Get the best voice for edge-tts based on selected language"""
         if self.edge_voice:
             return self.edge_voice
         
         # Get list of available voices
         voices = await edge_tts.list_voices()
         
-        # Find a good English (US) neural voice
-        for voice in voices:
-            if voice["Locale"].startswith("en-") and "Neural" in voice["ShortName"]:
-                # Prefer female voices (Aria, Jenny, etc.)
-                if any(name in voice["ShortName"] for name in ["Aria", "Jenny", "Michelle"]):
+        # Language-specific voice selection
+        if self.language == "de":
+            # Find a good German neural voice
+            for voice in voices:
+                if voice["Locale"].startswith("de-") and "Neural" in voice["ShortName"]:
+                    # Prefer female voices (Katja, etc.)
+                    if any(name in voice["ShortName"] for name in ["Katja", "Amala", "Conrad"]):
+                        return voice["ShortName"]
+            
+            # Fall back to any German neural voice
+            for voice in voices:
+                if voice["Locale"].startswith("de-") and "Neural" in voice["ShortName"]:
                     return voice["ShortName"]
+            
+            # Default fallback for German
+            return "de-DE-KatjaNeural"
         
-        # Fall back to any English neural voice
-        for voice in voices:
-            if voice["Locale"].startswith("en-") and "Neural" in voice["ShortName"]:
-                return voice["ShortName"]
-        
-        # Default fallback
-        return "en-US-AriaNeural"
+        else:  # English (default)
+            # Find a good English (US) neural voice
+            for voice in voices:
+                if voice["Locale"].startswith("en-") and "Neural" in voice["ShortName"]:
+                    # Prefer female voices (Aria, Jenny, etc.)
+                    if any(name in voice["ShortName"] for name in ["Aria", "Jenny", "Michelle"]):
+                        return voice["ShortName"]
+            
+            # Fall back to any English neural voice
+            for voice in voices:
+                if voice["Locale"].startswith("en-") and "Neural" in voice["ShortName"]:
+                    return voice["ShortName"]
+            
+            # Default fallback for English
+            return "en-US-AriaNeural"
     
     def generate_wav(self, text: str, output_path: str) -> bool:
         """
@@ -198,7 +257,7 @@ class TTSGenerator:
             
             return True
             
-        except Exception as e:
+        except Exception:
             # Clean up temp file if it exists
             if temp_path and os.path.exists(temp_path):
                 try:

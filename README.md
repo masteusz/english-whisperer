@@ -1,11 +1,12 @@
 # English Whisperer
 
-A cross-platform desktop application that generates WAV audio files from English words using offline text-to-speech (TTS). Perfect for creating audio files for language learning, accessibility, or any project requiring word-to-speech conversion.
+A cross-platform desktop application that generates WAV audio files from words using high-quality text-to-speech (TTS). Supports English and German languages. Perfect for creating audio files for language learning, accessibility, or any project requiring word-to-speech conversion.
 
 ## Features
 
 - **Cross-platform**: Works on Linux and Windows
 - **High-Quality TTS**: Uses Microsoft Edge TTS (neural voices) by default for natural-sounding speech
+- **Multi-language Support**: Supports English and German (Deutsch)
 - **Offline Fallback**: Automatically falls back to system TTS (pyttsx3) if internet is unavailable
 - **Batch Processing**: Generate multiple WAV files from a word list
 - **User-friendly GUI**: Modern graphical interface built with Qt (PySide6)
@@ -94,16 +95,20 @@ uv run python -m src.main
 
 ### Using the GUI
 
-1. **Enter Words**: Type or paste your word list in the text area. Words can be:
+1. **Select Language**: Choose your language from the dropdown (English or German)
+
+2. **Enter Words**: Type or paste your word list in the text area. Words can be:
    - Separated by newlines (one per line)
    - Separated by commas
    - Mixed format
 
-2. **Select Output Directory**: Click "Browse..." to choose where WAV files will be saved
+3. **Select Output Directory**: Click "Browse..." to choose where WAV files will be saved
 
-3. **Generate**: Click "Generate WAV Files" to start processing
+4. **Generate**: Click "Generate WAV Files" to start processing
 
-4. **Monitor Progress**: Watch the progress bar and status log for real-time updates
+5. **Monitor Progress**: Watch the progress bar and status log for real-time updates
+
+**Note**: You can change the language at any time, but it's recommended to wait for the current generation to complete before changing languages.
 
 ### Example Word List
 
