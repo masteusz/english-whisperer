@@ -5,12 +5,6 @@ import sys
 import tempfile
 from typing import Optional
 
-# Workaround for X11 threading issues on Linux
-# Import pyttsx3 after setting environment variables
-if sys.platform == 'linux':
-    # Prevent X11 threading conflicts
-    os.environ.setdefault('PYTHONUNBUFFERED', '1')
-
 import pyttsx3
 
 
@@ -33,8 +27,7 @@ class TTSGenerator:
     def _initialize_engine(self):
         """Initialize the pyttsx3 TTS engine"""
         try:
-            # On Linux, pyttsx3 may have X11 threading issues
-            # Try to initialize with driver name to avoid conflicts
+            # Try to initialize with explicit driver on Linux for better compatibility
             if sys.platform == 'linux':
                 try:
                     # Try espeak driver explicitly
