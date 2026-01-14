@@ -5,7 +5,8 @@ description = "A cross-platform desktop application that generates WAV audio fil
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
-    "pyttsx3>=2.90",
+    "edge-tts>=6.1.0",  # Microsoft Edge TTS - high quality, free, requires internet
+    "pyttsx3>=2.90",  # Offline fallback TTS engine
     "PySide6>=6.5.0",
 ]
 

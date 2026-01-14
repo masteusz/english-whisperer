@@ -5,7 +5,8 @@ A cross-platform desktop application that generates WAV audio files from English
 ## Features
 
 - **Cross-platform**: Works on Linux and Windows
-- **Offline TTS**: No internet connection required
+- **High-Quality TTS**: Uses Microsoft Edge TTS (neural voices) by default for natural-sounding speech
+- **Offline Fallback**: Automatically falls back to system TTS (pyttsx3) if internet is unavailable
 - **Batch Processing**: Generate multiple WAV files from a word list
 - **User-friendly GUI**: Modern graphical interface built with Qt (PySide6)
 - **Progress Tracking**: Real-time progress updates and status logging
@@ -14,6 +15,8 @@ A cross-platform desktop application that generates WAV audio files from English
 ## Requirements
 
 ### System Dependencies
+
+**For offline TTS (pyttsx3 fallback):**
 
 **Linux:**
 - `espeak` or `espeak-ng` (text-to-speech engine)
@@ -32,12 +35,16 @@ A cross-platform desktop application that generates WAV audio files from English
 - SAPI5 (usually pre-installed with Windows)
 - If not available, install Microsoft Speech Platform SDK
 
+**For online TTS (recommended, high quality):**
+- Internet connection (for Microsoft Edge TTS)
+
 ### Python Dependencies
 
 - Python 3.8 or higher
 - `uv` (fast Python package installer)
-- `pyttsx3` (TTS engine, managed via uv)
-- `PySide6` (Qt GUI framework, managed via uv)
+- `edge-tts` (Microsoft Edge TTS - high quality neural voices, requires internet)
+- `pyttsx3` (Offline fallback TTS engine)
+- `PySide6` (Qt GUI framework)
 
 ## Installation
 
@@ -162,13 +169,16 @@ The executable will be in the `dist/` directory.
 
 ### TTS Engine Not Found
 
-**Linux:**
-- Ensure `espeak` or `espeak-ng` is installed
-- Verify installation: `espeak --version`
+**For Edge TTS (recommended, high quality):**
+- Ensure you have an internet connection
+- Edge TTS is free and uses Microsoft's neural voices
+- If offline, the app will automatically fall back to system TTS
 
-**Windows:**
-- SAPI5 should be pre-installed
-- If issues occur, try installing Microsoft Speech Platform SDK
+**For offline TTS (fallback):**
+- **Linux:** Ensure `espeak` or `espeak-ng` is installed
+  - Verify installation: `espeak --version`
+- **Windows:** SAPI5 should be pre-installed
+  - If issues occur, try installing Microsoft Speech Platform SDK
 
 ### No Audio Generated
 

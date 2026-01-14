@@ -229,18 +229,31 @@ class EnglishWhispererApp(QMainWindow):
     def _init_tts(self):
         """Initialize the TTS generator (called after GUI is ready)"""
         try:
-            self.tts_generator = TTSGenerator()
+            # Try edge-tts first (best quality), fall back to pyttsx3
+            self.tts_generator = TTSGenerator(engine="auto")
+            engine_name = self.tts_generator.get_engine_name()
+            is_online = self.tts_generator.is_online_required()
             self.generate_btn.setEnabled(True)
-            self._log("TTS engine initialized successfully")
+            
+            status_msg = f"TTS engine initialized: {engine_name}"
+            if is_online:
+                status_msg += " (Requires internet connection)"
+            self._log(status_msg)
+            
+            # Update window title to show engine
+            if "Edge" in engine_name:
+                self.setWindowTitle("English Whisperer - TTS WAV Generator (Neural TTS)")
+            else:
+                self.setWindowTitle("English Whisperer - TTS WAV Generator (System TTS)")
         except Exception as e:
             self.tts_init_error = str(e)
             self.tts_generator = None
             self.generate_btn.setEnabled(False)
             error_msg = (
                 f"Failed to initialize TTS engine:\n{str(e)}\n\n"
-                "Please ensure you have the required TTS system installed:\n"
-                "- Linux: espeak or espeak-ng\n"
-                "- Windows: SAPI5 (usually pre-installed)\n\n"
+                "Please ensure you have a TTS engine available:\n"
+                "- For best quality: Install Coqui TTS (uv add TTS)\n"
+                "- Fallback: Linux needs espeak/espeak-ng, Windows needs SAPI5\n\n"
                 "The application will continue, but WAV generation will be disabled."
             )
             self._log(f"ERROR: {error_msg}")
