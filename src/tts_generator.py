@@ -147,14 +147,12 @@ class TTSGenerator:
         # Get list of available voices
         voices = await edge_tts.list_voices()
         
-        # Language-specific voice selection
+        # Language-specific voice selection with preferred defaults
         if self.language == "de":
-            # Find a good German neural voice
+            # Default: Amala (DE)
             for voice in voices:
-                if voice["Locale"].startswith("de-") and "Neural" in voice["ShortName"]:
-                    # Prefer female voices (Katja, etc.)
-                    if any(name in voice["ShortName"] for name in ["Katja", "Amala", "Conrad"]):
-                        return voice["ShortName"]
+                if voice["ShortName"] == "de-DE-AmalaNeural":
+                    return voice["ShortName"]
             
             # Fall back to any German neural voice
             for voice in voices:
@@ -162,15 +160,13 @@ class TTSGenerator:
                     return voice["ShortName"]
             
             # Default fallback for German
-            return "de-DE-KatjaNeural"
+            return "de-DE-AmalaNeural"
         
         else:  # English (default)
-            # Find a good English (US) neural voice
+            # Default: Libby (UK)
             for voice in voices:
-                if voice["Locale"].startswith("en-") and "Neural" in voice["ShortName"]:
-                    # Prefer female voices (Aria, Jenny, etc.)
-                    if any(name in voice["ShortName"] for name in ["Aria", "Jenny", "Michelle"]):
-                        return voice["ShortName"]
+                if voice["ShortName"] == "en-GB-LibbyNeural":
+                    return voice["ShortName"]
             
             # Fall back to any English neural voice
             for voice in voices:
@@ -178,7 +174,7 @@ class TTSGenerator:
                     return voice["ShortName"]
             
             # Default fallback for English
-            return "en-US-AriaNeural"
+            return "en-GB-LibbyNeural"
     
     def generate_wav(self, text: str, output_path: str) -> bool:
         """
@@ -218,8 +214,17 @@ class TTSGenerator:
             # Get voice
             voice = await self._get_edge_voice()
             
-            # Generate speech
-            communicate = edge_tts.Communicate(text, voice)
+            # Calculate rate as percentage offset from normal (150 WPM)
+            # Edge TTS rate format: '+0%' (normal), '+50%' (faster), '-25%' (slower)
+            # Convert WPM to percentage: (WPM - 150) / 150 * 100
+            if self.rate != 150:
+                rate_percent = int((self.rate - 150) / 150.0 * 100)
+                rate_str = f"+{rate_percent}%" if rate_percent >= 0 else f"{rate_percent}%"
+            else:
+                rate_str = "+0%"  # Normal speed
+            
+            # Generate speech with rate parameter (no SSML needed!)
+            communicate = edge_tts.Communicate(text, voice, rate=rate_str)
             await communicate.save(output_path)
         
         try:
@@ -266,17 +271,102 @@ class TTSGenerator:
                     pass
             raise
     
+    async def _list_edge_voices_async(self, language: Optional[str] = None):
+        """List available edge-tts voices (async)"""
+        if not EDGE_TTS_AVAILABLE:
+            return []
+        
+        voices = await edge_tts.list_voices()
+        
+        if language:
+            # Filter by language
+            lang_prefix = language + "-"
+            filtered = [v for v in voices if v["Locale"].startswith(lang_prefix)]
+            return filtered
+        
+        return voices
+    
     def get_available_voices(self):
-        """Get list of available voices"""
+        """Get list of available voices (synchronous wrapper)"""
         if self.current_engine == "edge":
-            # For edge-tts, we'd need async to list voices
-            # Return a placeholder for now
-            return [{"name": "Edge TTS Neural Voice", "type": "neural"}]
+            # For edge-tts, we need async - return cached list or empty
+            # This will be populated by async method
+            return []
         elif self.current_engine == "pyttsx3":
             if not self.pyttsx3_engine:
                 return []
-            return self.pyttsx3_engine.getProperty('voices')
+            voices = self.pyttsx3_engine.getProperty('voices')
+            # Convert to list of dicts for consistency
+            result = []
+            for i, voice in enumerate(voices):
+                result.append({
+                    "id": voice.id,
+                    "name": voice.name,
+                    "index": i
+                })
+            return result
         return []
+    
+    async def get_available_edge_voices(self, language: Optional[str] = None):
+        """Get list of available edge-tts voices for the current language"""
+        if not EDGE_TTS_AVAILABLE:
+            return []
+        
+        voices = await self._list_edge_voices_async(language or self.language)
+        
+        # Format for display with user-friendly names
+        result = []
+        for voice in voices:
+            if "Neural" in voice["ShortName"]:  # Only show neural voices
+                # Extract voice name (e.g., "Aria" from "en-US-AriaNeural")
+                short_name = voice["ShortName"]
+                voice_name = short_name.split("-")[-1].replace("Neural", "").replace("Multilingual", "")
+                
+                # Get gender
+                gender = voice.get("Gender", "Unknown")
+                gender_symbol = "♀" if gender == "Female" else "♂" if gender == "Male" else ""
+                
+                # Get locale info (e.g., "US" from "en-US")
+                locale = voice.get("Locale", "")
+                locale_parts = locale.split("-")
+                country = locale_parts[1] if len(locale_parts) > 1 else ""
+                
+                # Create user-friendly display name
+                # Format: "Aria ♀ (US)" or "Katja ♀ (DE)"
+                if country:
+                    display_name = f"{voice_name} {gender_symbol} ({country})"
+                else:
+                    display_name = f"{voice_name} {gender_symbol}"
+                
+                result.append({
+                    "id": short_name,
+                    "name": display_name,
+                    "friendly_name": voice.get("FriendlyName", short_name),
+                    "locale": locale,
+                    "gender": gender,
+                    "short_name": short_name
+                })
+        
+        return result
+    
+    def set_rate(self, rate: int):
+        """
+        Set the speech rate (words per minute)
+        
+        Args:
+            rate: Speech rate in words per minute (typically 50-300)
+        """
+        if rate < 50 or rate > 300:
+            raise ValueError("Rate must be between 50 and 300 words per minute")
+        
+        self.rate = rate
+        
+        # Update pyttsx3 if it's the current engine
+        if self.current_engine == "pyttsx3" and self.pyttsx3_engine:
+            try:
+                self.pyttsx3_engine.setProperty('rate', rate)
+            except Exception:
+                pass  # Ignore errors
     
     def get_engine_name(self) -> str:
         """Get the name of the current engine"""
@@ -290,24 +380,35 @@ class TTSGenerator:
         """Check if the current engine requires internet connection"""
         return self.current_engine == "edge"
     
-    def set_voice(self, voice_id: Optional[int] = None):
+    def set_voice(self, voice: Optional[str] = None):
         """
-        Set the voice to use (only for pyttsx3)
+        Set the voice to use
         
         Args:
-            voice_id: Index of the voice in available voices list, or None for default
+            voice: For edge-tts: voice name (e.g., "en-US-AriaNeural")
+                   For pyttsx3: voice index (int) or None for default
         """
-        if self.current_engine != "pyttsx3":
-            raise RuntimeError("Voice selection only available for pyttsx3 engine")
-        
-        if not self.pyttsx3_engine:
+        if self.current_engine == "edge":
+            # For edge-tts, set the voice name directly
+            self.edge_voice = voice
+        elif self.current_engine == "pyttsx3":
+            if not self.pyttsx3_engine:
+                raise RuntimeError("TTS engine not initialized")
+            
+            if voice is not None:
+                try:
+                    # Try as index first
+                    voice_id = int(voice)
+                    voices = self.get_available_voices()
+                    if 0 <= voice_id < len(voices):
+                        self.pyttsx3_engine.setProperty('voice', voices[voice_id]["id"])
+                    else:
+                        raise ValueError(f"Invalid voice index: {voice_id}")
+                except (ValueError, TypeError):
+                    # Try as voice ID string
+                    self.pyttsx3_engine.setProperty('voice', voice)
+        else:
             raise RuntimeError("TTS engine not initialized")
-        
-        voices = self.get_available_voices()
-        if voice_id is not None and 0 <= voice_id < len(voices):
-            self.pyttsx3_engine.setProperty('voice', voices[voice_id].id)
-        elif voice_id is not None:
-            raise ValueError(f"Invalid voice index: {voice_id}")
     
     def cleanup(self):
         """Clean up the TTS engine resources"""

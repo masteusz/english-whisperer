@@ -7,6 +7,8 @@ A cross-platform desktop application that generates WAV audio files from words u
 - **Cross-platform**: Works on Linux and Windows
 - **High-Quality TTS**: Uses Microsoft Edge TTS (neural voices) by default for natural-sounding speech
 - **Multi-language Support**: Supports English and German (Deutsch)
+- **Voice Selection**: Choose from multiple available voices for each language
+- **Speed Control**: Adjustable speech rate (50-300 words per minute)
 - **Offline Fallback**: Automatically falls back to system TTS (pyttsx3) if internet is unavailable
 - **Batch Processing**: Generate multiple WAV files from a word list
 - **User-friendly GUI**: Modern graphical interface built with Qt (PySide6)
@@ -97,18 +99,28 @@ uv run python -m src.main
 
 1. **Select Language**: Choose your language from the dropdown (English or German)
 
-2. **Enter Words**: Type or paste your word list in the text area. Words can be:
+2. **Select Voice** (optional): Choose a specific voice from the dropdown. For Edge TTS, multiple neural voices are available. For system TTS, available voices depend on your system.
+
+3. **Adjust Speed** (optional): Choose speech speed using radio buttons:
+   - **Slower**: 100 WPM (more deliberate speech)
+   - **Normal**: 150 WPM (default, natural pace)
+   - **Faster**: 200 WPM (quicker speech)
+
+4. **Enter Words**: Type or paste your word list in the text area. Words can be:
    - Separated by newlines (one per line)
    - Separated by commas
    - Mixed format
 
-3. **Select Output Directory**: Click "Browse..." to choose where WAV files will be saved
+5. **Select Output Directory**: Click "Browse..." to choose where WAV files will be saved
 
-4. **Generate**: Click "Generate WAV Files" to start processing
+6. **Generate**: Click "Generate WAV Files" to start processing
 
-5. **Monitor Progress**: Watch the progress bar and status log for real-time updates
+7. **Monitor Progress**: Watch the progress bar and status log for real-time updates
 
-**Note**: You can change the language at any time, but it's recommended to wait for the current generation to complete before changing languages.
+**Note**: 
+- You can change language, voice, and speed at any time, but it's recommended to wait for the current generation to complete before changing settings.
+- The **Generate WAV Files** button is prominently displayed and styled for easy access.
+- Speed control works with both Edge TTS and pyttsx3 engines.
 
 ### Example Word List
 
