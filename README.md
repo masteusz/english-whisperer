@@ -102,9 +102,9 @@ uv run python -m src.main
 2. **Select Voice** (optional): Choose a specific voice from the dropdown. For Edge TTS, multiple neural voices are available. For system TTS, available voices depend on your system.
 
 3. **Adjust Speed** (optional): Choose speech speed using radio buttons:
-   - **Slower**: 100 WPM (more deliberate speech)
-   - **Normal**: 150 WPM (default, natural pace)
-   - **Faster**: 200 WPM (quicker speech)
+   - **Slower**: 50 WPM (very slow, deliberate speech)
+   - **Normal**: 100 WPM (default, natural pace)
+   - **Faster**: 150 WPM (quicker speech)
 
 4. **Enter Words**: Type or paste your word list in the text area. Words can be:
    - Separated by newlines (one per line)

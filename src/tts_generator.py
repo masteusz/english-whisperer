@@ -24,7 +24,7 @@ class TTSGenerator:
     def __init__(
         self,
         engine: Literal["edge", "pyttsx3", "auto"] = "auto",
-        rate: int = 150,
+        rate: int = 100,
         volume: float = 0.9,
         voice: Optional[str] = None,  # For edge-tts: voice name like "en-US-AriaNeural"
         language: Literal["en", "de"] = "en"  # Language: "en" for English, "de" for German
@@ -34,7 +34,7 @@ class TTSGenerator:
         
         Args:
             engine: TTS engine to use ("edge", "pyttsx3", or "auto" for best available)
-            rate: Speech rate (words per minute), default 150 (only for pyttsx3)
+            rate: Speech rate (words per minute), default 100 (only for pyttsx3)
             volume: Volume level (0.0 to 1.0), default 0.9 (only for pyttsx3)
             voice: Voice name for edge-tts (e.g., "en-US-AriaNeural"), None for auto-select
             language: Language code ("en" for English, "de" for German)
@@ -214,11 +214,11 @@ class TTSGenerator:
             # Get voice
             voice = await self._get_edge_voice()
             
-            # Calculate rate as percentage offset from normal (150 WPM)
-            # Edge TTS rate format: '+0%' (normal), '+50%' (faster), '-25%' (slower)
-            # Convert WPM to percentage: (WPM - 150) / 150 * 100
-            if self.rate != 150:
-                rate_percent = int((self.rate - 150) / 150.0 * 100)
+            # Calculate rate as percentage offset from normal (100 WPM)
+            # Edge TTS rate format: '+0%' (normal), '+50%' (faster), '-50%' (slower)
+            # Convert WPM to percentage: (WPM - 100) / 100 * 100
+            if self.rate != 100:
+                rate_percent = int((self.rate - 100) / 100.0 * 100)
                 rate_str = f"+{rate_percent}%" if rate_percent >= 0 else f"{rate_percent}%"
             else:
                 rate_str = "+0%"  # Normal speed
@@ -354,10 +354,10 @@ class TTSGenerator:
         Set the speech rate (words per minute)
         
         Args:
-            rate: Speech rate in words per minute (typically 50-300)
+            rate: Speech rate in words per minute (typically 50-150)
         """
-        if rate < 50 or rate > 300:
-            raise ValueError("Rate must be between 50 and 300 words per minute")
+        if rate < 50 or rate > 150:
+            raise ValueError("Rate must be between 50 and 150 words per minute")
         
         self.rate = rate
         

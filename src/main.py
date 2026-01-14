@@ -200,27 +200,27 @@ class EnglishWhispererApp(QMainWindow):
         speed_layout = QHBoxLayout()
         speed_label = QLabel("Speed:")
         speed_label.setFont(QFont("Arial", 10))
-        speed_label.setToolTip("Adjust the speech rate: Slower (100 WPM), Normal (150 WPM), or Faster (200 WPM)")
+        speed_label.setToolTip("Adjust the speech rate: Slower (50 WPM), Normal (100 WPM), or Faster (150 WPM)")
         speed_layout.addWidget(speed_label)
         
         self.speed_group = QButtonGroup()
         
-        self.speed_slower = QRadioButton("Slower (100 WPM)")
+        self.speed_slower = QRadioButton("Slower (50 WPM)")
         self.speed_slower.setEnabled(False)
-        self.speed_slower.setToolTip("Slower speech rate - 100 words per minute")
+        self.speed_slower.setToolTip("Slower speech rate - 50 words per minute")
         self.speed_group.addButton(self.speed_slower, 0)
         speed_layout.addWidget(self.speed_slower)
         
-        self.speed_normal = QRadioButton("Normal (150 WPM)")
+        self.speed_normal = QRadioButton("Normal (100 WPM)")
         self.speed_normal.setChecked(True)
         self.speed_normal.setEnabled(False)
-        self.speed_normal.setToolTip("Normal speech rate - 150 words per minute (default)")
+        self.speed_normal.setToolTip("Normal speech rate - 100 words per minute (default)")
         self.speed_group.addButton(self.speed_normal, 1)
         speed_layout.addWidget(self.speed_normal)
         
-        self.speed_faster = QRadioButton("Faster (200 WPM)")
+        self.speed_faster = QRadioButton("Faster (150 WPM)")
         self.speed_faster.setEnabled(False)
-        self.speed_faster.setToolTip("Faster speech rate - 200 words per minute")
+        self.speed_faster.setToolTip("Faster speech rate - 150 words per minute")
         self.speed_group.addButton(self.speed_faster, 2)
         speed_layout.addWidget(self.speed_faster)
         
@@ -436,11 +436,11 @@ class EnglishWhispererApp(QMainWindow):
     def _get_speed_value(self) -> int:
         """Get the current speed value from radio buttons"""
         if self.speed_slower.isChecked():
-            return 100  # Slower
+            return 50  # Slower
         elif self.speed_faster.isChecked():
-            return 200  # Faster
+            return 150  # Faster
         else:
-            return 150  # Normal (default)
+            return 100  # Normal (default)
     
     def _init_tts(self):
         """Initialize the TTS generator (called after GUI is ready)"""
@@ -622,7 +622,7 @@ class EnglishWhispererApp(QMainWindow):
         
         try:
             speed = self._get_speed_value()
-            speed_name = "Slower" if speed == 100 else "Faster" if speed == 200 else "Normal"
+            speed_name = "Slower" if speed == 50 else "Faster" if speed == 150 else "Normal"
             self.tts_generator.set_rate(speed)
             self._log(f"Speed set to: {speed_name} ({speed} WPM)")
         except Exception as e:
@@ -695,14 +695,14 @@ class EnglishWhispererApp(QMainWindow):
     
     def _on_file_complete(self, filename: str):
         """Handle file completion from worker thread"""
-        self._log(f"  Saved: {filename}")
+        self._log(f"  ✓ Saved: {filename}")
     
     def _on_error_occurred(self, word: str, error_msg: str):
         """Handle error from worker thread"""
         if word:
-            self._log(f"  Error for '{word}': {error_msg}")
+            self._log(f"  ✗ Error for '{word}': {error_msg}")
         else:
-            self._log(f"  Error: {error_msg}")
+            self._log(f"  ✗ {error_msg}")
             QMessageBox.critical(self, "Generation Error", error_msg)
     
     def _on_generation_complete(self, success_count: int, error_count: int, total_count: int):
