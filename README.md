@@ -7,7 +7,7 @@ A cross-platform desktop application that generates WAV audio files from English
 - **Cross-platform**: Works on Linux and Windows
 - **Offline TTS**: No internet connection required
 - **Batch Processing**: Generate multiple WAV files from a word list
-- **User-friendly GUI**: Simple graphical interface built with tkinter
+- **User-friendly GUI**: Modern graphical interface built with Qt (PySide6)
 - **Progress Tracking**: Real-time progress updates and status logging
 - **Error Handling**: Robust error handling with detailed feedback
 
@@ -36,7 +36,8 @@ A cross-platform desktop application that generates WAV audio files from English
 
 - Python 3.8 or higher
 - `uv` (fast Python package installer)
-- `pyttsx3` (managed via uv)
+- `pyttsx3` (TTS engine, managed via uv)
+- `PySide6` (Qt GUI framework, managed via uv)
 
 ## Installation
 
@@ -179,7 +180,8 @@ The executable will be in the `dist/` directory.
 
 - Ensure Python 3.8+ is installed
 - Verify all dependencies are installed: `uv sync`
-- Check that tkinter is available (usually included with Python)
+- On Linux, ensure Qt libraries are available (usually installed with PySide6)
+- If you see X11 errors, Qt should handle threading better than tkinter
 
 ## License
 

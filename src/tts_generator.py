@@ -1,9 +1,17 @@
 """Text-to-Speech generator using pyttsx3"""
 
-import pyttsx3
-import tempfile
 import os
+import sys
+import tempfile
 from typing import Optional
+
+# Workaround for X11 threading issues on Linux
+# Import pyttsx3 after setting environment variables
+if sys.platform == 'linux':
+    # Prevent X11 threading conflicts
+    os.environ.setdefault('PYTHONUNBUFFERED', '1')
+
+import pyttsx3
 
 
 class TTSGenerator:
@@ -25,7 +33,18 @@ class TTSGenerator:
     def _initialize_engine(self):
         """Initialize the pyttsx3 TTS engine"""
         try:
-            self.engine = pyttsx3.init()
+            # On Linux, pyttsx3 may have X11 threading issues
+            # Try to initialize with driver name to avoid conflicts
+            if sys.platform == 'linux':
+                try:
+                    # Try espeak driver explicitly
+                    self.engine = pyttsx3.init('espeak')
+                except (RuntimeError, OSError):
+                    # Fall back to default initialization
+                    self.engine = pyttsx3.init()
+            else:
+                self.engine = pyttsx3.init()
+            
             self.engine.setProperty('rate', self.rate)
             self.engine.setProperty('volume', self.volume)
         except Exception as e:
