@@ -2,17 +2,68 @@
 
 import sys
 import os
+import json
+import tempfile
+from pathlib import Path
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QTextEdit, QFileDialog, QMessageBox,
-    QProgressBar, QGroupBox, QComboBox, QRadioButton, QButtonGroup
+    QProgressBar, QGroupBox, QComboBox, QRadioButton, QButtonGroup,
+    QCheckBox, QMenu
 )
-from PySide6.QtCore import Qt, QThread, Signal, QTimer
-from PySide6.QtGui import QFont, QKeySequence, QShortcut
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QUrl
+from PySide6.QtGui import QFont, QKeySequence, QShortcut, QDragEnterEvent, QDropEvent
+from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 from .tts_generator import TTSGenerator
 from .file_handler import parse_word_list, get_output_path, validate_output_directory
+
+
+class DragDropTextEdit(QTextEdit):
+    """Custom QTextEdit that supports drag and drop for text files"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        """Handle drag enter event"""
+        if event.mimeData().hasUrls():
+            # Check if any of the URLs point to text files
+            for url in event.mimeData().urls():
+                if url.isLocalFile():
+                    file_path = url.toLocalFile()
+                    if file_path.endswith(('.txt', '.csv', '.list')):
+                        event.acceptProposedAction()
+                        return
+        event.ignore()
+
+    def dragMoveEvent(self, event):
+        """Handle drag move event"""
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent):
+        """Handle drop event"""
+        if event.mimeData().hasUrls():
+            for url in event.mimeData().urls():
+                if url.isLocalFile():
+                    file_path = url.toLocalFile()
+                    if file_path.endswith(('.txt', '.csv', '.list')):
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                                self.setPlainText(content)
+                            event.acceptProposedAction()
+                            return
+                        except Exception as e:
+                            QMessageBox.warning(
+                                self,
+                                "File Load Error",
+                                f"Could not load file: {str(e)}"
+                            )
+            event.ignore()
 
 
 class GenerationWorker(QThread):
@@ -73,10 +124,10 @@ class GenerationWorker(QThread):
 
 class EnglishWhispererApp(QMainWindow):
     """Main application window"""
-    
+
     def __init__(self):
         super().__init__()
-        
+
         # Application state
         self.output_dir = ""
         self.tts_generator = None
@@ -84,17 +135,66 @@ class EnglishWhispererApp(QMainWindow):
         self.tts_init_error = None
         self.generation_worker = None
         self.current_language = "en"  # Default to English
-        
+        self.compact_mode = False
+        self.recent_dirs = []
+        self.config_file = Path.home() / ".english_whisperer_config.json"
+
+        # Audio preview
+        self.media_player = QMediaPlayer()
+        self.audio_output = QAudioOutput()
+        self.media_player.setAudioOutput(self.audio_output)
+
+        # Load config
+        self._load_config()
+
         # Initialize UI
         self._init_ui()
-        
+
         # Initialize TTS engine after UI is ready
         QTimer.singleShot(100, self._init_tts)
-    
+
+    def _load_config(self):
+        """Load configuration from file"""
+        try:
+            if self.config_file.exists():
+                with open(self.config_file, 'r') as f:
+                    config = json.load(f)
+                    self.recent_dirs = config.get('recent_dirs', [])[:10]  # Keep max 10
+                    self.compact_mode = config.get('compact_mode', False)
+                    # Load last output directory if it still exists
+                    if self.recent_dirs and os.path.exists(self.recent_dirs[0]):
+                        self.output_dir = self.recent_dirs[0]
+        except Exception:
+            pass  # Ignore config load errors
+
+    def _save_config(self):
+        """Save configuration to file"""
+        try:
+            config = {
+                'recent_dirs': self.recent_dirs,
+                'compact_mode': self.compact_mode
+            }
+            with open(self.config_file, 'w') as f:
+                json.dump(config, f, indent=2)
+        except Exception:
+            pass  # Ignore config save errors
+
+    def _add_recent_dir(self, directory: str):
+        """Add directory to recent list"""
+        if directory in self.recent_dirs:
+            self.recent_dirs.remove(directory)
+        self.recent_dirs.insert(0, directory)
+        self.recent_dirs = self.recent_dirs[:10]  # Keep max 10
+        self._save_config()
+        self._update_recent_dirs_menu()
+
     def _init_ui(self):
         """Initialize the user interface"""
         self.setWindowTitle("English Whisperer - TTS WAV Generator")
         self.setGeometry(100, 100, 750, 700)
+
+        # Create menu bar
+        self._create_menu_bar()
         
         # Apply modern styling
         self.setStyleSheet("""
@@ -234,13 +334,25 @@ class EnglishWhispererApp(QMainWindow):
         words_group = QGroupBox("Word List")
         words_layout = QVBoxLayout(words_group)
         words_layout.setSpacing(8)
-        
+
+        # Header with instructions and word count
+        header_layout = QHBoxLayout()
         instructions = QLabel("Enter words (one per line or comma-separated):")
         instructions.setFont(QFont("Arial", 9))
         instructions.setStyleSheet("color: #555555;")
-        words_layout.addWidget(instructions)
-        
-        self.word_list_text = QTextEdit()
+        header_layout.addWidget(instructions)
+
+        header_layout.addStretch()
+
+        self.word_count_label = QLabel("0 words")
+        self.word_count_label.setFont(QFont("Arial", 9))
+        self.word_count_label.setStyleSheet("color: #7f8c8d; font-weight: bold;")
+        self.word_count_label.setToolTip("Number of words to be processed")
+        header_layout.addWidget(self.word_count_label)
+
+        words_layout.addLayout(header_layout)
+
+        self.word_list_text = DragDropTextEdit()
         self.word_list_text.setFont(QFont("Arial", 11))
         self.word_list_text.setPlaceholderText(
             "Enter words here, one per line or separated by commas...\n\n"
@@ -248,10 +360,29 @@ class EnglishWhispererApp(QMainWindow):
             "  hello\n"
             "  world\n"
             "  python\n\n"
-            "Or: hello, world, python, programming"
+            "Or: hello, world, python, programming\n\n"
+            "💡 Tip: Drag & drop a .txt file here to load words"
         )
-        self.word_list_text.setToolTip("Enter the words you want to convert to speech. You can use newlines or commas to separate words.")
+        self.word_list_text.setToolTip("Enter the words you want to convert to speech. You can use newlines or commas to separate words.\nDrag & drop a text file to load it.")
+        self.word_list_text.textChanged.connect(self._update_word_count)
         words_layout.addWidget(self.word_list_text)
+
+        # Word list action buttons
+        word_list_buttons = QHBoxLayout()
+        load_btn = QPushButton("Load from File...")
+        load_btn.setToolTip("Load word list from a text file (Ctrl+O)")
+        load_btn.clicked.connect(self._load_word_list)
+        load_btn.setMinimumWidth(120)
+        word_list_buttons.addWidget(load_btn)
+
+        save_btn = QPushButton("Save to File...")
+        save_btn.setToolTip("Save word list to a text file (Ctrl+S)")
+        save_btn.clicked.connect(self._save_word_list)
+        save_btn.setMinimumWidth(120)
+        word_list_buttons.addWidget(save_btn)
+
+        word_list_buttons.addStretch()
+        words_layout.addLayout(word_list_buttons)
         
         main_layout.addWidget(words_group)
         
@@ -259,27 +390,44 @@ class EnglishWhispererApp(QMainWindow):
         output_group = QGroupBox("Output Directory")
         output_layout = QVBoxLayout(output_group)
         output_layout.setSpacing(8)
-        
+
         self.output_dir_label = QLabel("No directory selected")
         self.output_dir_label.setStyleSheet("color: #999999; font-style: italic;")
         self.output_dir_label.setToolTip("Select a folder where the generated WAV files will be saved")
         output_layout.addWidget(self.output_dir_label)
-        
+
         dir_layout = QHBoxLayout()
+
+        # Browse button with dropdown for recent directories
         browse_btn = QPushButton("Browse...")
         browse_btn.clicked.connect(self._browse_output_dir)
         browse_btn.setToolTip("Click to select the output folder for WAV files")
         browse_btn.setMinimumWidth(120)
+
+        # Add menu for recent directories
+        self.recent_dirs_menu = QMenu(self)
+        browse_btn.setMenu(self.recent_dirs_menu)
+        self._update_recent_dirs_menu()
+
         dir_layout.addWidget(browse_btn)
-        
+
         self.output_dir_display = QLabel("")
         self.output_dir_display.setStyleSheet("color: #2980b9; padding: 5px; background-color: #ecf0f1; border-radius: 3px;")
         self.output_dir_display.setWordWrap(True)
         self.output_dir_display.setToolTip("Currently selected output directory")
         dir_layout.addWidget(self.output_dir_display, 1)
-        
+
         output_layout.addLayout(dir_layout)
         main_layout.addWidget(output_group)
+
+        # Set output directory if loaded from config
+        if self.output_dir:
+            self.output_dir_label.setText("Selected:")
+            self.output_dir_label.setStyleSheet("color: black;")
+            display_path = self.output_dir
+            if len(display_path) > 60:
+                display_path = "..." + display_path[-57:]
+            self.output_dir_display.setText(display_path)
         
         # Control buttons - Generate button is prominent
         button_layout = QVBoxLayout()
@@ -318,11 +466,21 @@ class EnglishWhispererApp(QMainWindow):
         
         # Secondary buttons
         secondary_layout = QHBoxLayout()
+
+        preview_btn = QPushButton("🔊 Preview Voice")
+        preview_btn.clicked.connect(self._preview_audio)
+        preview_btn.setToolTip("Generate and play a sample to test voice and speed (Ctrl+P)")
+        preview_btn.setMinimumWidth(130)
+        preview_btn.setEnabled(False)
+        self.preview_btn = preview_btn
+        secondary_layout.addWidget(preview_btn)
+
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(self._clear_input)
         clear_btn.setToolTip("Clear the word list (Ctrl+L)")
         clear_btn.setMinimumWidth(100)
         secondary_layout.addWidget(clear_btn)
+
         secondary_layout.addStretch()
         button_layout.addLayout(secondary_layout)
         
@@ -389,20 +547,135 @@ class EnglishWhispererApp(QMainWindow):
         # Generate shortcut (Ctrl+G or Enter)
         generate_shortcut = QShortcut(QKeySequence("Ctrl+G"), self)
         generate_shortcut.activated.connect(self._start_generation)
-        
+
         # Also allow Enter key when word list has focus (but not when editing)
         enter_shortcut = QShortcut(QKeySequence(Qt.Key_Return), self.word_list_text)
         enter_shortcut.setContext(Qt.WidgetShortcut)
         enter_shortcut.activated.connect(self._start_generation)
-        
+
         # Clear shortcut (Ctrl+L)
         clear_shortcut = QShortcut(QKeySequence("Ctrl+L"), self)
         clear_shortcut.activated.connect(self._clear_input)
-        
+
         # Focus word list (Ctrl+W)
         focus_words_shortcut = QShortcut(QKeySequence("Ctrl+W"), self)
         focus_words_shortcut.activated.connect(lambda: self.word_list_text.setFocus())
+
+        # Load word list (Ctrl+O)
+        load_shortcut = QShortcut(QKeySequence("Ctrl+O"), self)
+        load_shortcut.activated.connect(self._load_word_list)
+
+        # Save word list (Ctrl+S)
+        save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        save_shortcut.activated.connect(self._save_word_list)
+
+        # Preview audio (Ctrl+P)
+        preview_shortcut = QShortcut(QKeySequence("Ctrl+P"), self)
+        preview_shortcut.activated.connect(self._preview_audio)
     
+    def _create_menu_bar(self):
+        """Create the menu bar"""
+        menu_bar = self.menuBar()
+
+        # File menu
+        file_menu = menu_bar.addMenu("&File")
+
+        load_action = file_menu.addAction("Load Word List...")
+        load_action.setShortcut(QKeySequence("Ctrl+O"))
+        load_action.triggered.connect(self._load_word_list)
+
+        save_action = file_menu.addAction("Save Word List...")
+        save_action.setShortcut(QKeySequence("Ctrl+S"))
+        save_action.triggered.connect(self._save_word_list)
+
+        file_menu.addSeparator()
+
+        quit_action = file_menu.addAction("Quit")
+        quit_action.setShortcut(QKeySequence("Ctrl+Q"))
+        quit_action.triggered.connect(self.close)
+
+        # View menu
+        view_menu = menu_bar.addMenu("&View")
+
+        self.compact_mode_action = view_menu.addAction("Compact Mode")
+        self.compact_mode_action.setCheckable(True)
+        self.compact_mode_action.setChecked(self.compact_mode)
+        self.compact_mode_action.triggered.connect(self._toggle_compact_mode)
+
+        # Tools menu
+        tools_menu = menu_bar.addMenu("&Tools")
+
+        preview_action = tools_menu.addAction("Preview Voice")
+        preview_action.setShortcut(QKeySequence("Ctrl+P"))
+        preview_action.triggered.connect(self._preview_audio)
+
+    def _toggle_compact_mode(self):
+        """Toggle compact mode"""
+        self.compact_mode = self.compact_mode_action.isChecked()
+        self._save_config()
+
+        # Apply compact mode styling
+        if self.compact_mode:
+            # Reduce spacing and padding
+            self.centralWidget().layout().setSpacing(8)
+            self.centralWidget().layout().setContentsMargins(10, 10, 10, 10)
+            # Make status log smaller
+            self.status_log.setMaximumHeight(100)
+        else:
+            # Restore normal spacing
+            self.centralWidget().layout().setSpacing(15)
+            self.centralWidget().layout().setContentsMargins(15, 15, 15, 15)
+            # Restore status log size
+            self.status_log.setMaximumHeight(16777215)  # Qt's default max
+
+        self._log(f"Compact mode: {'enabled' if self.compact_mode else 'disabled'}")
+
+    def _update_recent_dirs_menu(self):
+        """Update the recent directories menu"""
+        self.recent_dirs_menu.clear()
+
+        # Add browse action
+        browse_action = self.recent_dirs_menu.addAction("Browse for Directory...")
+        browse_action.triggered.connect(self._browse_output_dir)
+
+        if self.recent_dirs:
+            self.recent_dirs_menu.addSeparator()
+            # Add recent directories
+            for directory in self.recent_dirs:
+                if os.path.exists(directory):
+                    # Truncate long paths for menu display
+                    display_path = directory
+                    if len(display_path) > 50:
+                        display_path = "..." + display_path[-47:]
+
+                    action = self.recent_dirs_menu.addAction(display_path)
+                    # Use lambda with default argument to capture the directory
+                    action.triggered.connect(lambda checked=False, d=directory: self._select_recent_dir(d))
+
+    def _select_recent_dir(self, directory: str):
+        """Select a directory from the recent list"""
+        if os.path.exists(directory):
+            self.output_dir = directory
+            self.output_dir_label.setText("Selected:")
+            self.output_dir_label.setStyleSheet("color: black;")
+            display_path = directory
+            if len(display_path) > 60:
+                display_path = "..." + display_path[-57:]
+            self.output_dir_display.setText(display_path)
+            self._add_recent_dir(directory)
+            self._log(f"Output directory set to: {directory}")
+        else:
+            QMessageBox.warning(
+                self,
+                "Directory Not Found",
+                f"The directory no longer exists:\n{directory}"
+            )
+            # Remove from recent list
+            if directory in self.recent_dirs:
+                self.recent_dirs.remove(directory)
+                self._save_config()
+                self._update_recent_dirs_menu()
+
     def _browse_output_dir(self):
         """Open directory browser"""
         directory = QFileDialog.getExistingDirectory(
@@ -419,13 +692,155 @@ class EnglishWhispererApp(QMainWindow):
             if len(display_path) > 60:
                 display_path = "..." + display_path[-57:]
             self.output_dir_display.setText(display_path)
+            self._add_recent_dir(directory)
             self._log(f"Output directory set to: {directory}")
     
     def _clear_input(self):
         """Clear the word list input"""
         self.word_list_text.clear()
         self._log("Input cleared")
-    
+
+    def _update_word_count(self):
+        """Update the word count label"""
+        text = self.word_list_text.toPlainText().strip()
+        if text:
+            words = parse_word_list(text)
+            count = len(words)
+            self.word_count_label.setText(f"{count} word{'s' if count != 1 else ''}")
+            self.word_count_label.setStyleSheet("color: #27ae60; font-weight: bold;")
+        else:
+            self.word_count_label.setText("0 words")
+            self.word_count_label.setStyleSheet("color: #7f8c8d; font-weight: bold;")
+
+    def _load_word_list(self):
+        """Load word list from file"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Word List",
+            os.path.expanduser("~"),
+            "Text Files (*.txt);;CSV Files (*.csv);;All Files (*.*)"
+        )
+
+        if file_path:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                self.word_list_text.setPlainText(content)
+                self._log(f"Loaded word list from: {os.path.basename(file_path)}")
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "Load Error",
+                    f"Could not load file:\n{str(e)}"
+                )
+
+    def _save_word_list(self):
+        """Save word list to file"""
+        text = self.word_list_text.toPlainText().strip()
+        if not text:
+            QMessageBox.warning(self, "Nothing to Save", "The word list is empty.")
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Word List",
+            os.path.expanduser("~/word_list.txt"),
+            "Text Files (*.txt);;All Files (*.*)"
+        )
+
+        if file_path:
+            try:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(text)
+                self._log(f"Saved word list to: {os.path.basename(file_path)}")
+                QMessageBox.information(
+                    self,
+                    "Save Successful",
+                    f"Word list saved to:\n{file_path}"
+                )
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "Save Error",
+                    f"Could not save file:\n{str(e)}"
+                )
+
+    def _preview_audio(self):
+        """Preview audio with current voice and speed settings"""
+        if not self.tts_generator:
+            QMessageBox.warning(
+                self,
+                "TTS Not Ready",
+                "TTS engine is not initialized yet."
+            )
+            return
+
+        if self.is_processing:
+            QMessageBox.warning(
+                self,
+                "Busy",
+                "Please wait for the current generation to complete."
+            )
+            return
+
+        # Use a sample word based on language
+        sample_word = "Hello" if self.current_language == "en" else "Hallo"
+
+        # Ask user for custom preview text
+        from PySide6.QtWidgets import QInputDialog
+        text, ok = QInputDialog.getText(
+            self,
+            "Preview Audio",
+            f"Enter text to preview (current: {sample_word}):",
+            text=sample_word
+        )
+
+        if not ok or not text.strip():
+            return
+
+        text = text.strip()
+
+        try:
+            # Create temporary file
+            temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+            temp_path = temp_file.name
+            temp_file.close()
+
+            self._log(f"Generating preview: '{text}'...")
+            self.preview_btn.setEnabled(False)
+
+            # Generate audio
+            self.tts_generator.generate_wav(text, temp_path)
+
+            # Play audio
+            self.media_player.setSource(QUrl.fromLocalFile(temp_path))
+            self.media_player.play()
+
+            self._log(f"Playing preview: '{text}'")
+
+            # Re-enable button after a delay
+            QTimer.singleShot(2000, lambda: self.preview_btn.setEnabled(True))
+
+            # Clean up temp file after playback
+            def cleanup_temp():
+                try:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                except:
+                    pass
+
+            # Delete temp file after 10 seconds
+            QTimer.singleShot(10000, cleanup_temp)
+
+        except Exception as e:
+            self._log(f"Preview error: {str(e)}")
+            QMessageBox.critical(
+                self,
+                "Preview Error",
+                f"Could not generate preview:\n{str(e)}"
+            )
+            self.preview_btn.setEnabled(True)
+
     def _log(self, message: str):
         """Add a message to the status log"""
         self.status_log.append(message)
@@ -455,6 +870,7 @@ class EnglishWhispererApp(QMainWindow):
             engine_name = self.tts_generator.get_engine_name()
             is_online = self.tts_generator.is_online_required()
             self.generate_btn.setEnabled(True)
+            self.preview_btn.setEnabled(True)
             # Enable speed radio buttons
             self.speed_slower.setEnabled(True)
             self.speed_normal.setEnabled(True)
@@ -478,6 +894,7 @@ class EnglishWhispererApp(QMainWindow):
             self.tts_init_error = str(e)
             self.tts_generator = None
             self.generate_btn.setEnabled(False)
+            self.preview_btn.setEnabled(False)
             # Disable speed radio buttons
             self.speed_slower.setEnabled(False)
             self.speed_normal.setEnabled(False)
@@ -749,10 +1166,10 @@ class EnglishWhispererApp(QMainWindow):
                 self,
                 "Quit",
                 "Generation in progress. Cancel and quit?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
             )
-            if reply == QMessageBox.Yes:
+            if reply == QMessageBox.StandardButton.Yes:
                 if self.generation_worker:
                     self.generation_worker.cancel()
                     self.generation_worker.wait()

@@ -19,9 +19,11 @@ except ImportError:
 
 try:
     from pydub import AudioSegment
+    from pydub.utils import which
     PYDUB_AVAILABLE = True
 except ImportError:
     PYDUB_AVAILABLE = False
+    which = None
 
 
 class TTSGenerator:
@@ -241,7 +243,18 @@ class TTSGenerator:
                     "edge-tts generates MP3 format and needs conversion to WAV. "
                     "Install with: uv add pydub"
                 )
-            
+
+            # Check if ffmpeg is available (required for MP3 conversion)
+            if which and not which("ffmpeg") and not which("avconv"):
+                raise RuntimeError(
+                    "ffmpeg not found. pydub requires ffmpeg for MP3 to WAV conversion.\n"
+                    "Windows: Download from https://github.com/BtbN/FFmpeg-Builds/releases and add to PATH, "
+                    "or use 'choco install ffmpeg'\n"
+                    "Linux: sudo apt-get install ffmpeg (Ubuntu/Debian) or sudo dnf install ffmpeg (Fedora)\n"
+                    "macOS: brew install ffmpeg\n"
+                    "Verify installation with: ffmpeg -version"
+                )
+
             # Load the audio file (edge-tts generates MP3)
             try:
                 audio = AudioSegment.from_file(temp_output)
