@@ -136,6 +136,7 @@ class EnglishWhispererApp(QMainWindow):
         self.generation_worker = None
         self.current_language = "en"  # Default to English
         self.compact_mode = False
+        self.dark_theme = False
         self.recent_dirs = []
         self.config_file = Path.home() / ".english_whisperer_config.json"
 
@@ -161,6 +162,7 @@ class EnglishWhispererApp(QMainWindow):
                     config = json.load(f)
                     self.recent_dirs = config.get('recent_dirs', [])[:10]  # Keep max 10
                     self.compact_mode = config.get('compact_mode', False)
+                    self.dark_theme = config.get('dark_theme', False)
                     # Load last output directory if it still exists
                     if self.recent_dirs and os.path.exists(self.recent_dirs[0]):
                         self.output_dir = self.recent_dirs[0]
@@ -172,7 +174,8 @@ class EnglishWhispererApp(QMainWindow):
         try:
             config = {
                 'recent_dirs': self.recent_dirs,
-                'compact_mode': self.compact_mode
+                'compact_mode': self.compact_mode,
+                'dark_theme': self.dark_theme
             }
             with open(self.config_file, 'w') as f:
                 json.dump(config, f, indent=2)
@@ -196,40 +199,6 @@ class EnglishWhispererApp(QMainWindow):
         # Create menu bar
         self._create_menu_bar()
         
-        # Apply modern styling
-        self.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                border: 2px solid #cccccc;
-                border-radius: 5px;
-                margin-top: 10px;
-                padding-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px;
-            }
-            QLabel {
-                color: #333333;
-            }
-            QComboBox {
-                padding: 5px;
-                border: 1px solid #cccccc;
-                border-radius: 3px;
-            }
-            QComboBox:hover {
-                border: 1px solid #999999;
-            }
-            QRadioButton {
-                spacing: 5px;
-            }
-            QRadioButton::indicator {
-                width: 18px;
-                height: 18px;
-            }
-        """)
-        
         # Central widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -239,25 +208,36 @@ class EnglishWhispererApp(QMainWindow):
         main_layout.setSpacing(15)
         main_layout.setContentsMargins(15, 15, 15, 15)
         
+        # Theme toggle button in top-right corner
+        top_bar = QHBoxLayout()
+        top_bar.addStretch()
+        self.theme_btn = QPushButton("🌙")
+        self.theme_btn.setFixedSize(34, 30)
+        self.theme_btn.setFlat(True)
+        self.theme_btn.setToolTip("Toggle dark / light theme")
+        self.theme_btn.clicked.connect(self._toggle_theme)
+        top_bar.addWidget(self.theme_btn)
+        main_layout.addLayout(top_bar)
+        
         # Title with subtitle
         title_container = QWidget()
         title_layout = QVBoxLayout(title_container)
         title_layout.setContentsMargins(0, 0, 0, 0)
         
-        title_label = QLabel("English Whisperer")
+        self.title_label = QLabel("English Whisperer")
         title_font = QFont()
         title_font.setPointSize(18)
         title_font.setBold(True)
-        title_label.setFont(title_font)
-        title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("color: #2c3e50; margin-bottom: 5px;")
-        title_layout.addWidget(title_label)
+        self.title_label.setFont(title_font)
+        self.title_label.setAlignment(Qt.AlignCenter)
+        self.title_label.setStyleSheet("color: #2c3e50; margin-bottom: 5px;")
+        title_layout.addWidget(self.title_label)
         
-        subtitle = QLabel("Generate WAV audio files from words")
-        subtitle.setFont(QFont("Arial", 9))
-        subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setStyleSheet("color: #7f8c8d;")
-        title_layout.addWidget(subtitle)
+        self.subtitle_label = QLabel("Generate WAV audio files from words")
+        self.subtitle_label.setFont(QFont("Arial", 9))
+        self.subtitle_label.setAlignment(Qt.AlignCenter)
+        self.subtitle_label.setStyleSheet("color: #7f8c8d;")
+        title_layout.addWidget(self.subtitle_label)
         
         main_layout.addWidget(title_container)
         
@@ -281,6 +261,29 @@ class EnglishWhispererApp(QMainWindow):
         self.language_combo.setToolTip("Choose the language for speech synthesis")
         language_layout.addWidget(self.language_combo, 1)
         settings_layout.addLayout(language_layout)
+        
+        # Engine selection
+        engine_layout = QHBoxLayout()
+        engine_label = QLabel("Engine:")
+        engine_label.setFont(QFont("Arial", 10))
+        engine_label.setToolTip("Select the text-to-speech backend engine")
+        engine_layout.addWidget(engine_label)
+        
+        self.engine_combo = QComboBox()
+        self.engine_combo.addItem("Google TTS (gTTS)", "gtts")
+        self.engine_combo.addItem("Microsoft Edge TTS", "edge")
+        self.engine_combo.addItem("System TTS (pyttsx3)", "pyttsx3")
+        self.engine_combo.addItem("Automatic", "auto")
+        self.engine_combo.setCurrentIndex(0)  # gTTS primary
+        self.engine_combo.currentIndexChanged.connect(self._on_engine_changed)
+        self.engine_combo.setToolTip(
+            "Google TTS: online, works in most regions.\n"
+            "Microsoft Edge TTS: neural voices, blocked in some regions.\n"
+            "System TTS: offline (pyttsx3).\n"
+            "Automatic: gTTS -> Edge -> System."
+        )
+        engine_layout.addWidget(self.engine_combo, 1)
+        settings_layout.addLayout(engine_layout)
         
         # Voice selection with tooltip
         voice_layout = QHBoxLayout()
@@ -337,10 +340,10 @@ class EnglishWhispererApp(QMainWindow):
 
         # Header with instructions and word count
         header_layout = QHBoxLayout()
-        instructions = QLabel("Enter words (one per line or comma-separated):")
-        instructions.setFont(QFont("Arial", 9))
-        instructions.setStyleSheet("color: #555555;")
-        header_layout.addWidget(instructions)
+        self.instructions_label = QLabel("Enter words (one per line or comma-separated):")
+        self.instructions_label.setFont(QFont("Arial", 9))
+        self.instructions_label.setStyleSheet("color: #555555;")
+        header_layout.addWidget(self.instructions_label)
 
         header_layout.addStretch()
 
@@ -392,7 +395,7 @@ class EnglishWhispererApp(QMainWindow):
         output_layout.setSpacing(8)
 
         self.output_dir_label = QLabel("No directory selected")
-        self.output_dir_label.setStyleSheet("color: #999999; font-style: italic;")
+        self.output_dir_label.setStyleSheet("font-style: italic;")
         self.output_dir_label.setToolTip("Select a folder where the generated WAV files will be saved")
         output_layout.addWidget(self.output_dir_label)
 
@@ -412,7 +415,6 @@ class EnglishWhispererApp(QMainWindow):
         dir_layout.addWidget(browse_btn)
 
         self.output_dir_display = QLabel("")
-        self.output_dir_display.setStyleSheet("color: #2980b9; padding: 5px; background-color: #ecf0f1; border-radius: 3px;")
         self.output_dir_display.setWordWrap(True)
         self.output_dir_display.setToolTip("Currently selected output directory")
         dir_layout.addWidget(self.output_dir_display, 1)
@@ -423,7 +425,6 @@ class EnglishWhispererApp(QMainWindow):
         # Set output directory if loaded from config
         if self.output_dir:
             self.output_dir_label.setText("Selected:")
-            self.output_dir_label.setStyleSheet("color: black;")
             display_path = self.output_dir
             if len(display_path) > 60:
                 display_path = "..." + display_path[-57:]
@@ -539,6 +540,9 @@ class EnglishWhispererApp(QMainWindow):
         main_layout.setStretchFactor(words_group, 3)
         main_layout.setStretchFactor(log_group, 1)
         
+        # Apply saved theme
+        self._apply_theme(self.dark_theme)
+        
         # Add keyboard shortcuts
         self._setup_shortcuts()
     
@@ -602,6 +606,11 @@ class EnglishWhispererApp(QMainWindow):
         self.compact_mode_action.setChecked(self.compact_mode)
         self.compact_mode_action.triggered.connect(self._toggle_compact_mode)
 
+        self.theme_action = view_menu.addAction("Dark Theme")
+        self.theme_action.setCheckable(True)
+        self.theme_action.setChecked(self.dark_theme)
+        self.theme_action.triggered.connect(self._toggle_theme)
+
         # Tools menu
         tools_menu = menu_bar.addMenu("&Tools")
 
@@ -629,6 +638,186 @@ class EnglishWhispererApp(QMainWindow):
             self.status_log.setMaximumHeight(16777215)  # Qt's default max
 
         self._log(f"Compact mode: {'enabled' if self.compact_mode else 'disabled'}")
+
+    def _toggle_theme(self):
+        """Toggle between dark and light theme"""
+        new_dark = not self.dark_theme
+        self._apply_theme(new_dark)
+        self.theme_action.setChecked(new_dark)
+        self._save_config()
+        self._log(f"Theme switched to {'dark' if new_dark else 'light'}")
+
+    def _apply_theme(self, dark: bool):
+        """Apply dark or light theme to the whole UI"""
+        self.dark_theme = dark
+
+        # Update theme toggle button icon
+        if hasattr(self, 'theme_btn'):
+            self.theme_btn.setText("☀️" if dark else "🌙")
+
+        # Recolor persistently-styled labels
+        title_color = "#ffffff" if dark else "#2c3e50"
+        sub_color = "#b0b4b8" if dark else "#7f8c8d"
+        muted_color = "#9aa0a6" if dark else "#7f8c8d"
+        body_color = "#9aa0a6" if dark else "#555555"
+        self.title_label.setStyleSheet(f"color: {title_color}; margin-bottom: 5px;")
+        self.subtitle_label.setStyleSheet(f"color: {sub_color};")
+        self.word_count_label.setStyleSheet(f"color: {muted_color}; font-weight: bold;")
+        self.instructions_label.setStyleSheet(f"color: {body_color};")
+        self.output_dir_label.setStyleSheet("font-style: italic;" + f"color: {muted_color};")
+        if dark:
+            self.output_dir_display.setStyleSheet(
+                "padding: 5px; border-radius: 3px; color: #e0e0e0; background-color: #2a2a2e;"
+            )
+        else:
+            self.output_dir_display.setStyleSheet(
+                "padding: 5px; border-radius: 3px; color: #2980b9; background-color: #ecf0f1;"
+            )
+        if dark:
+            self.status_log.setStyleSheet(
+                "QTextEdit { background-color: #252526; border: 1px solid #3a3a3a; border-radius: 3px; padding: 5px; }"
+            )
+        else:
+            self.status_log.setStyleSheet(
+                "QTextEdit { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 3px; padding: 5px; }"
+            )
+
+        # Apply global stylesheet for the selected theme
+        self.setStyleSheet(self._DARK_QSS if dark else self._LIGHT_QSS)
+
+    _LIGHT_QSS = """
+        QGroupBox {
+            font-weight: bold;
+            border: 2px solid #cccccc;
+            border-radius: 5px;
+            margin-top: 10px;
+            padding-top: 10px;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            left: 10px;
+            padding: 0 5px;
+        }
+        QLabel {
+            color: #333333;
+        }
+        QComboBox {
+            padding: 5px;
+            border: 1px solid #cccccc;
+            border-radius: 3px;
+        }
+        QComboBox:hover {
+            border: 1px solid #999999;
+        }
+        QRadioButton {
+            spacing: 5px;
+        }
+        QRadioButton::indicator {
+            width: 18px;
+            height: 18px;
+        }
+        QProgressBar {
+            border: 1px solid #cccccc;
+            border-radius: 3px;
+            text-align: center;
+        }
+        QProgressBar::chunk {
+            background-color: #3498db;
+        }
+    """
+
+    _DARK_QSS = """
+        QWidget {
+            background-color: #1e1e1e;
+            color: #e0e0e0;
+        }
+        QMainWindow {
+            background-color: #1e1e1e;
+        }
+        QGroupBox {
+            color: #e0e0e0;
+            font-weight: bold;
+            border: 2px solid #3a3a3a;
+            border-radius: 5px;
+            margin-top: 10px;
+            padding-top: 10px;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            left: 10px;
+            padding: 0 5px;
+        }
+        QLabel {
+            color: #e0e0e0;
+        }
+        QTextEdit {
+            background-color: #252526;
+            color: #e0e0e0;
+            border: 1px solid #3a3a3a;
+        }
+        QComboBox {
+            padding: 5px;
+            border: 1px solid #3a3a3a;
+            border-radius: 3px;
+            background-color: #252526;
+            color: #e0e0e0;
+        }
+        QComboBox:hover {
+            border: 1px solid #555555;
+        }
+        QComboBox QAbstractItemView {
+            background-color: #2d2d30;
+            color: #e0e0e0;
+            selection-background-color: #094771;
+        }
+        QRadioButton {
+            spacing: 5px;
+            color: #e0e0e0;
+        }
+        QPushButton {
+            background-color: #3a3a3a;
+            color: #e0e0e0;
+            border: 1px solid #4a4a4a;
+            border-radius: 3px;
+            padding: 5px;
+        }
+        QPushButton:hover {
+            background-color: #4a4a4a;
+        }
+        QPushButton:disabled {
+            color: #6a6a6a;
+            background-color: #2a2a2a;
+        }
+        QProgressBar {
+            border: 1px solid #3a3a3a;
+            border-radius: 3px;
+            background-color: #2a2a2a;
+            text-align: center;
+            color: #e0e0e0;
+        }
+        QProgressBar::chunk {
+            background-color: #3498db;
+        }
+        QMenuBar {
+            background-color: #252526;
+            color: #e0e0e0;
+        }
+        QMenuBar::item:selected {
+            background-color: #3a3a3a;
+        }
+        QMenu {
+            background-color: #252526;
+            color: #e0e0e0;
+        }
+        QMenu::item:selected {
+            background-color: #094771;
+        }
+        QToolTip {
+            background-color: #2d2d30;
+            color: #e0e0e0;
+            border: 1px solid #3a3a3a;
+        }
+    """
 
     def _update_recent_dirs_menu(self):
         """Update the recent directories menu"""
@@ -856,6 +1045,36 @@ class EnglishWhispererApp(QMainWindow):
             return 150  # Faster
         else:
             return 100  # Normal (default)
+
+    def _get_engine_value(self) -> str:
+        """Get the currently selected engine from the dropdown"""
+        if hasattr(self, 'engine_combo'):
+            return self.engine_combo.currentData() or "gtts"
+        return "gtts"
+
+    def _on_engine_changed(self, index: int):
+        """Handle engine selection change"""
+        if not hasattr(self, 'tts_generator'):
+            return
+
+        if self.tts_generator and self.is_processing:
+            QMessageBox.warning(
+                self,
+                "Cannot Change Engine",
+                "Please wait for the current generation to complete before changing the engine."
+            )
+            # Reset to previous engine
+            prev = self.tts_generator.current_engine
+            if prev is None:
+                prev = "gtts"
+            self.engine_combo.blockSignals(True)
+            idx = self.engine_combo.findData(prev)
+            self.engine_combo.setCurrentIndex(max(idx, 0))
+            self.engine_combo.blockSignals(False)
+            return
+
+        # Re-initialize the TTS generator with the selected engine
+        self._init_tts()
     
     def _init_tts(self):
         """Initialize the TTS generator (called after GUI is ready)"""
@@ -863,9 +1082,10 @@ class EnglishWhispererApp(QMainWindow):
             # Get current language and speed from UI
             language = self.language_combo.currentData()
             speed = self._get_speed_value()
+            engine = self._get_engine_value()
             
-            # Try edge-tts first (best quality), fall back to pyttsx3
-            self.tts_generator = TTSGenerator(engine="auto", language=language, rate=speed)
+            # Use selected engine (gTTS default, best for most regions)
+            self.tts_generator = TTSGenerator(engine=engine, language=language, rate=speed)
             self.current_language = language
             engine_name = self.tts_generator.get_engine_name()
             is_online = self.tts_generator.is_online_required()
@@ -886,8 +1106,10 @@ class EnglishWhispererApp(QMainWindow):
             self._load_voices()
             
             # Update window title to show engine
-            if "Edge" in engine_name:
+            if self.tts_generator.current_engine == "edge":
                 self.setWindowTitle("English Whisperer - TTS WAV Generator (Neural TTS)")
+            elif self.tts_generator.current_engine == "gtts":
+                self.setWindowTitle("English Whisperer - TTS WAV Generator (Web TTS)")
             else:
                 self.setWindowTitle("English Whisperer - TTS WAV Generator (System TTS)")
         except Exception as e:
@@ -954,6 +1176,11 @@ class EnglishWhispererApp(QMainWindow):
                     self._log(f"Warning: Could not load voices: {str(e)}")
                     self.voice_combo.addItem("Auto (Default)", None)
                     self.voice_combo.setEnabled(False)
+            elif self.tts_generator.current_engine == "gtts":
+                # gTTS uses a single default voice per language
+                self.voice_combo.addItem("Default Voice", None)
+                self.voice_combo.setEnabled(False)
+                self._log("Using gTTS default voice")
             else:
                 # Load pyttsx3 voices
                 voices = self.tts_generator.get_available_voices()

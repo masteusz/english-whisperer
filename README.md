@@ -29,37 +29,13 @@ A cross-platform desktop application that generates WAV audio files from words u
 
 ### System Dependencies
 
-**For online TTS (Edge TTS - recommended, high quality):**
+**For online TTS (gTTS - recommended, works in most regions):**
+- Internet connection (for Google Translate TTS)
+- No ffmpeg required - audio is converted to WAV with `miniaudio` (bundled decoder)
+
+**For online TTS (Edge TTS - neural voices, blocked in some regions):**
 - Internet connection (for Microsoft Edge TTS)
-- **ffmpeg** (required for audio conversion from MP3 to WAV)
-
-  **Windows:**
-  ```powershell
-  # Option 1: Using Chocolatey
-  choco install ffmpeg
-
-  # Option 2: Manual installation
-  # 1. Download from https://github.com/BtbN/FFmpeg-Builds/releases
-  # 2. Extract to C:\ffmpeg
-  # 3. Add C:\ffmpeg\bin to system PATH
-  ```
-
-  **Linux:**
-  ```bash
-  # Ubuntu/Debian
-  sudo apt-get install ffmpeg
-
-  # Fedora
-  sudo dnf install ffmpeg
-
-  # Arch Linux
-  sudo pacman -S ffmpeg
-  ```
-
-  **macOS:**
-  ```bash
-  brew install ffmpeg
-  ```
+- No ffmpeg required - audio is converted to WAV with `miniaudio`
 
 **For offline TTS (pyttsx3 fallback):**
 
@@ -84,10 +60,11 @@ A cross-platform desktop application that generates WAV audio files from words u
 
 - Python 3.8 or higher
 - `uv` (fast Python package installer)
-- `edge-tts` (Microsoft Edge TTS - high quality neural voices, requires internet)
+- `gtts` (Google TTS - primary online engine, works in most regions)
+- `edge-tts` (Microsoft Edge TTS - neural voices, requires internet)
 - `pyttsx3` (Offline fallback TTS engine)
 - `PySide6` (Qt GUI framework with multimedia support for audio preview)
-- `pydub` (Audio processing for MP3 to WAV conversion)
+- `miniaudio` (MP3 to WAV conversion, no ffmpeg required)
 
 ## Installation
 
@@ -139,7 +116,13 @@ uv run python -m src.main
 
 1. **Select Language**: Choose your language from the dropdown (English or German)
 
-2. **Select Voice** (optional): Choose a specific voice from the dropdown. For Edge TTS, multiple neural voices are available. For system TTS, available voices depend on your system.
+2. **Select Engine**: Choose the TTS backend from the dropdown:
+   - **Google TTS (gTTS)** - default, online, works in most regions
+   - **Microsoft Edge TTS** - neural voices, blocked in some regions
+   - **System TTS (pyttsx3)** - offline
+   - **Automatic** - gTTS -> Edge -> System
+
+3. **Select Voice** (optional): Choose a specific voice from the dropdown. For Edge TTS, multiple neural voices are available. For system TTS, available voices depend on your system.
 
 3. **Adjust Speed** (optional): Choose speech speed using radio buttons:
    - **Slower**: 75 WPM (slower, more deliberate speech)
@@ -253,24 +236,33 @@ The executable will be in the `dist/` directory.
 
 ### Audio Conversion Failed / MP3 to WAV Error
 
-**Error:** "ffmpeg not found" or "Failed to load audio file from edge-tts"
+**Error:** "Failed to load audio file" or conversion errors
 
 **Solution:**
-- **Windows:** Install ffmpeg and add it to your system PATH
-  - Download from https://github.com/BtbN/FFmpeg-Builds/releases or use `choco install ffmpeg`
-  - Verify installation: `ffmpeg -version` in Command Prompt
-- **Linux:** Install ffmpeg using your package manager (see System Dependencies)
-- **macOS:** Install via Homebrew: `brew install ffmpeg`
+- This is no longer needed. Audio is converted with `miniaudio`, which bundles its own MP3 decoder and requires no ffmpeg.
 
-Edge TTS generates MP3 files that need to be converted to WAV format, which requires ffmpeg.
+### Edge TTS 403 / Geo-blocked
+
+**Error:** `edge-tts generation failed: 403 ... speech.platform.bing.com`
+
+**Cause:** Microsoft blocks Edge TTS in some regions (e.g., parts of Europe). gTTS works in most regions.
+
+**Solution:**
+- Switch the Engine dropdown to **Google TTS (gTTS)** (default)
+- Or pick **System TTS (pyttsx3)** for offline use
+- Set Engine to **Automatic** to try gTTS first, then Edge, then System
 
 ### TTS Engine Not Found
 
-**For Edge TTS (recommended, high quality):**
+**For gTTS (recommended, works in most regions):**
 - Ensure you have an internet connection
-- Ensure ffmpeg is installed (see above)
+- gTTS uses Google Translate TTS and requires no API key
+
+**For Edge TTS (neural voices):**
+- Ensure you have an internet connection
+- Note: Edge TTS may be geo-blocked in your region (see above)
 - Edge TTS is free and uses Microsoft's neural voices
-- If offline, the app will automatically fall back to system TTS
+- If offline, the app will fall back to system TTS
 
 **For offline TTS (fallback):**
 - **Linux:** Ensure `espeak` or `espeak-ng` is installed
@@ -283,7 +275,7 @@ Edge TTS generates MP3 files that need to be converted to WAV format, which requ
 - Check that the output directory is writable
 - Verify words are not empty after parsing
 - Check the status log for specific error messages
-- Ensure ffmpeg is installed if using Edge TTS
+- If using Edge TTS, note it may be geo-blocked; switch to gTTS in the Engine dropdown
 
 ### Application Won't Start
 
