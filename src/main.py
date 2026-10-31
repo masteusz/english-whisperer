@@ -194,7 +194,7 @@ class EnglishWhispererApp(QMainWindow):
     def _init_ui(self):
         """Initialize the user interface"""
         self.setWindowTitle("English Whisperer - TTS WAV Generator")
-        self.setGeometry(100, 100, 750, 700)
+        self.setGeometry(100, 100, 1080, 640)
 
         # Create menu bar
         self._create_menu_bar()
@@ -205,8 +205,8 @@ class EnglishWhispererApp(QMainWindow):
         
         # Main layout
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setSpacing(15)
-        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(12, 12, 12, 12)
         
         # Theme toggle button in top-right corner
         top_bar = QHBoxLayout()
@@ -244,10 +244,14 @@ class EnglishWhispererApp(QMainWindow):
         # Settings section - moved to top for better workflow
         settings_group = QGroupBox("Voice Settings")
         settings_layout = QVBoxLayout(settings_group)
-        settings_layout.setSpacing(10)
+        settings_layout.setSpacing(8)
+
+        settings_row1 = QHBoxLayout()
+        settings_row1.setSpacing(12)
+        settings_layout.addLayout(settings_row1)
         
         # Language selection with tooltip
-        language_layout = QHBoxLayout()
+        language_layout = settings_row1
         language_label = QLabel("Language:")
         language_label.setFont(QFont("Arial", 10))
         language_label.setToolTip("Select the language for text-to-speech generation")
@@ -260,10 +264,8 @@ class EnglishWhispererApp(QMainWindow):
         self.language_combo.currentIndexChanged.connect(self._on_language_changed)
         self.language_combo.setToolTip("Choose the language for speech synthesis")
         language_layout.addWidget(self.language_combo, 1)
-        settings_layout.addLayout(language_layout)
-        
         # Engine selection
-        engine_layout = QHBoxLayout()
+        engine_layout = settings_row1
         engine_label = QLabel("Engine:")
         engine_label.setFont(QFont("Arial", 10))
         engine_label.setToolTip("Select the text-to-speech backend engine")
@@ -283,10 +285,9 @@ class EnglishWhispererApp(QMainWindow):
             "Automatic: gTTS -> Edge -> System."
         )
         engine_layout.addWidget(self.engine_combo, 1)
-        settings_layout.addLayout(engine_layout)
         
         # Voice selection with tooltip
-        voice_layout = QHBoxLayout()
+        voice_layout = settings_row1
         voice_label = QLabel("Voice:")
         voice_label.setFont(QFont("Arial", 10))
         voice_label.setToolTip("Select a specific voice (defaults are Libby for English, Amala for German)")
@@ -297,7 +298,6 @@ class EnglishWhispererApp(QMainWindow):
         self.voice_combo.currentIndexChanged.connect(self._on_voice_changed)
         self.voice_combo.setToolTip("Choose a voice. The default voice is automatically selected based on language.")
         voice_layout.addWidget(self.voice_combo, 1)
-        settings_layout.addLayout(voice_layout)
         
         # Speed selection with tooltip
         speed_layout = QHBoxLayout()
@@ -387,7 +387,17 @@ class EnglishWhispererApp(QMainWindow):
         word_list_buttons.addStretch()
         words_layout.addLayout(word_list_buttons)
         
-        main_layout.addWidget(words_group)
+        # Split body into two columns: word list left, controls right
+        body_layout = QHBoxLayout()
+        body_layout.setSpacing(15)
+        main_layout.addLayout(body_layout, 1)
+
+        body_layout.addWidget(words_group, 3)
+
+        # Right column: output, actions, progress, log
+        right_col = QVBoxLayout()
+        right_col.setSpacing(10)
+        body_layout.addLayout(right_col, 2)
         
         # Output directory section
         output_group = QGroupBox("Output Directory")
@@ -420,7 +430,7 @@ class EnglishWhispererApp(QMainWindow):
         dir_layout.addWidget(self.output_dir_display, 1)
 
         output_layout.addLayout(dir_layout)
-        main_layout.addWidget(output_group)
+        right_col.addWidget(output_group)
 
         # Set output directory if loaded from config
         if self.output_dir:
@@ -485,7 +495,7 @@ class EnglishWhispererApp(QMainWindow):
         secondary_layout.addStretch()
         button_layout.addLayout(secondary_layout)
         
-        main_layout.addLayout(button_layout)
+        right_col.addLayout(button_layout)
         
         # Progress section with better styling
         progress_group = QGroupBox("Progress")
@@ -514,7 +524,7 @@ class EnglishWhispererApp(QMainWindow):
         """)
         progress_layout.addWidget(self.progress_bar)
         
-        main_layout.addWidget(progress_group)
+        right_col.addWidget(progress_group)
         
         # Status log with better styling
         log_group = QGroupBox("Status Log")
@@ -534,11 +544,9 @@ class EnglishWhispererApp(QMainWindow):
         self.status_log.setToolTip("Shows status messages and generation progress")
         log_layout.addWidget(self.status_log)
         
-        main_layout.addWidget(log_group)
+        right_col.addWidget(log_group, 1)
         
-        # Set stretch factors for better layout
-        main_layout.setStretchFactor(words_group, 3)
-        main_layout.setStretchFactor(log_group, 1)
+
         
         # Apply saved theme
         self._apply_theme(self.dark_theme)
