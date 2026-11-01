@@ -219,29 +219,7 @@ class EnglishWhispererApp(QMainWindow):
         top_bar.addWidget(self.theme_btn)
         main_layout.addLayout(top_bar)
         
-        # Title with subtitle
-        title_container = QWidget()
-        title_layout = QVBoxLayout(title_container)
-        title_layout.setContentsMargins(0, 0, 0, 0)
-        
-        self.title_label = QLabel("English Whisperer")
-        title_font = QFont()
-        title_font.setPointSize(18)
-        title_font.setBold(True)
-        self.title_label.setFont(title_font)
-        self.title_label.setAlignment(Qt.AlignCenter)
-        self.title_label.setStyleSheet("color: #2c3e50; margin-bottom: 5px;")
-        title_layout.addWidget(self.title_label)
-        
-        self.subtitle_label = QLabel("Generate WAV audio files from words")
-        self.subtitle_label.setFont(QFont("Arial", 9))
-        self.subtitle_label.setAlignment(Qt.AlignCenter)
-        self.subtitle_label.setStyleSheet("color: #7f8c8d;")
-        title_layout.addWidget(self.subtitle_label)
-        
-        main_layout.addWidget(title_container)
-        
-        # Settings section - moved to top for better workflow
+        # Settings section
         settings_group = QGroupBox("Voice Settings")
         settings_layout = QVBoxLayout(settings_group)
         settings_layout.setSpacing(8)
@@ -664,12 +642,8 @@ class EnglishWhispererApp(QMainWindow):
             self.theme_btn.setText("☀️" if dark else "🌙")
 
         # Recolor persistently-styled labels
-        title_color = "#ffffff" if dark else "#2c3e50"
-        sub_color = "#b0b4b8" if dark else "#7f8c8d"
         muted_color = "#9aa0a6" if dark else "#7f8c8d"
         body_color = "#9aa0a6" if dark else "#555555"
-        self.title_label.setStyleSheet(f"color: {title_color}; margin-bottom: 5px;")
-        self.subtitle_label.setStyleSheet(f"color: {sub_color};")
         self.word_count_label.setStyleSheet(f"color: {muted_color}; font-weight: bold;")
         self.instructions_label.setStyleSheet(f"color: {body_color};")
         self.output_dir_label.setStyleSheet("font-style: italic;" + f"color: {muted_color};")
